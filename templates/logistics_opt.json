@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "metadata": {
+    "config_version": "3.1.0",
+    "environment": "${ENV}",
+    "last_modified": "2024-02-20T14:45:00Z",
+    "owner": "logistics-ai-team@corp.com"
+  },
+  "data_sources": {
+    "real_time_feeds": {
+      "gps_tracking": {
+        "endpoint": "kafka://logistics.prod:9092/vehicle-telemetry",
+        "refresh_interval": "15s",
+        "auth": {
+          "type": "MTLS",
+          "cert_path": "/secrets/gps_client_cert.pem"
+        }
+      },
+      "traffic_conditions": {
+        "apis": [
+          {
+            "provider": "HERE_MAPS",
+            "url": "https://traffic.ls.hereapi.com/flow",
+            "update_frequency": "5m",
+            "coverage_areas": ["NA", "EU"]
+          }
+        ]
+      }
+    },
+    "erp_integration": {
+      "sap": {
+        "connection": {
+          "type": "odata",
+          "base_url": "${SAP_ENDPOINT}",
+          "entities": ["Vehicle", "Driver", "Warehouse"]
+        },
+        "sync_schedule": "0 */2 * * *"  // Every 2 hours
+      }
+    }
+  },
+  "optimization_parameters": {
+    "routing": {
+      "algorithm": "genetic_hybrid",
+      "constraints": {
+        "time_windows": {
+          "strict": true,
+          "penalty_per_minute": 50.0
+        },
+        "vehicle_specs": {
+          "max_weight": "${VEHICLE_MAX_WEIGHT}",
+          "fuel_type": "diesel"
+        }
+      },
+      "ga_config": {
+        "population_size": 1000,
+        "max_generations": 500,
+        "mutation_rate": 0.02
+      }
+    },
+    "resource_allocation": {
+      "cost_models": {
+        "fuel": {
+          "price_per_liter": 1.35,
+          "consumption_rates": {
+            "highway": 0.25,  // L/km
+            "urban": 0.35
+          }
+        },
+        "driver_costs": {
+          "hourly_rate": 45.0,
+          "overtime_multiplier": 1.5
+        }
+      }
+    }
+  },
+  "live_monitoring": {
+    "thresholds": {
+      "eta_accuracy": {
+        "warning": "±15m",
+        "critical": "±30m"
+      },
+      "fuel_usage": {
+        "per_route_tolerance": "10%"
+      }
+    },
+    "alert_channels": {
+      "driver_devices": ["ELD", "MobileApp"],
+      "control_room": ["slack#logistics-alerts", "webhooks://oms"]
+    }
+  },
+  "compliance": {
+    "regional_regulations": {
+      "EU": {
+        "driving_hours": {
+          "max_daily": 9,
+          "weekly_rest": "45h"
+        }
+      },
+      "DOT": {
+        "electronic_logs": {
+          "format": "AOBRD",
+          "retention": "6m"
+        }
+      }
+    },
+    "sustainability": {
+      "co2_targets": {
+        "2024": "reduce_15%",
+        "2025": "carbon_neutral_routes"
+      }
+    }
+  },
+  "failure_modes": {
+    "degraded_operations": {
+      "network_outage": {
+        "fallback_to": "offline_maps",
+        "cache_ttl": "24h"
+      },
+      "api_failures": {
+        "retry_policy": {
+          "attempts": 5,
+          "backoff": "exponential",
+          "max_delay": "60s"
+        }
+      }
+    }
+  },
+  "custom_optimization_modules": {
+    "user_defined": [
+      {
+        "name": "hazardous_material_rules",
+        "path": "/plugins/hazmat.dll",
+        "api_version": "v2"
+      }
+    ]
+  }
+}
