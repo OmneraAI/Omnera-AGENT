@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "metadata": {
+    "config_version": "2.3.0",
+    "environment": "${ENV}",
+    "last_modified": "2024-02-20T09:30:00Z",
+    "owner": "risk-management-team@corp.com"
+  },
+  "data_sources": {
+    "market_data": {
+      "endpoints": [
+        {
+          "type": "kafka",
+          "bootstrap_servers": "kafka.prod:9092",
+          "topics": ["market-tickers", "fx-rates"],
+          "auth": {
+            "mechanism": "AWS_MSK_IAM",
+            "role_arn": "${RISK_KAFKA_ROLE_ARN}"
+          }
+        }
+      ],
+      "refresh_interval": "15s"
+    },
+    "client_data": {
+      "database": {
+        "type": "snowflake",
+        "account": "${SNOWFLAKE_ACCOUNT}",
+        "warehouse": "RISK_WH",
+        "query": {
+          "daily": "CALL GET_CLIENT_EXPOSURE()",
+          "intraday": "CALL GET_REALTIME_POSITIONS()"
+        }
+      }
+    }
+  },
+  "risk_parameters": {
+    "var": {
+      "confidence_level": 0.99,
+      "time_horizon": "1d",
+      "historical_period": 252,
+      "monte_carlo": {
+        "simulations": 10000,
+        "parallelization": "gpu"
+      }
+    },
+    "liquidity": {
+      "stress_scenarios": [
+        {
+          "name": "2008-Lehman",
+          "haircuts": {
+            "equities": 0.4,
+            "bonds": 0.25
+          }
+        }
+      ]
+    }
+  },
+  "calculation_rules": {
+    "cross_asset_correlation": {
+      "method": "dynamic_copula",
+      "lookback_window": "30d",
+      "rebuild_frequency": "1h"
+    },
+    "margin_requirements": {
+      "regulatory_frameworks": [
+        {
+          "name": "SEC-15c3-1",
+          "formula": "GREATER_OF(base_margin * 1.25, stress_test_result)"
+        }
+      ]
+    }
+  },
+  "alerting": {
+    "thresholds": {
+      "var_breach": {
+        "severity": "CRITICAL",
+        "value": 1000000,
+        "notification_channels": ["slack#risk-alerts", "pagerduty"]
+      },
+      "liquidity_coverage": {
+        "warning": 1.1,
+        "critical": 1.0
+      }
+    },
+    "suppression_rules": [
+      {
+        "condition": "market_holiday",
+        "action": "mute_noncritical"
+      }
+    ]
+  },
+  "compliance": {
+    "reporting": {
+      "daily": {
+        "recipients": ["regulatory@corp.com"],
+        "formats": ["xml", "pdf"],
+        "schemas": [
+          "FRTB",
+          "BASEL_III"
+        ]
+      }
+    },
+    "audit": {
+      "log_path": "/var/log/risk/audit",
+      "retention": "7y"
+    }
+  },
+  "model_service": {
+    "inference_endpoint": "https://ml-serving.prod/models/risk-ensemble/v3",
+    "fallback_strategy": {
+      "on_failure": "revert_to/v2",
+      "degraded_mode": {
+        "approximation_method": "linear_regression",
+        "accuracy_threshold": 0.85
+      }
+    }
+  }
+}
