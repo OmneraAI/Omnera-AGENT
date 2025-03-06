@@ -1,0 +1,144 @@
+name: Samsara AI Production Release
+
+on:
+  workflow_dispatch:    # Manual trigger for controlled releases
+  push:
+    tags:
+      - 'v*.*.*'        # Semantic versioning pattern (e.g., v1.4.0)
+
+env:
+  REGISTRY: ghcr.io     # GitHub Container Registry
+  EKS_CLUSTER: samsara-prod-eks
+  K8S_NAMESPACE: samsara
+  HELM_CHART: ./infrastructure/helm/samsara
+
+jobs:
+  build-sign-scan:
+    name: Build -> Sign -> Scan
+    runs-on: ubuntu-latest
+    outputs:
+      signed-image: ${{ steps.metadata.outputs.tags }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Docker metadata
+      id: metadata
+      uses: docker/metadata-action@v4
+      with:
+        images: ${{ env.REGISTRY }}/samsara-ai
+        tags: |
+          type=semver,pattern={{version}}
+          type=sha,prefix=,suffix=-prod
+
+    - name: Log into registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push multi-arch
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./infrastructure/docker/prod.Dockerfile
+        platforms: linux/amd64,linux/arm64
+        tags: ${{ steps.metadata.outputs.tags }}
+        labels: ${{ steps.metadata.outputs.labels }}
+        push: true
+
+    - name: Sign container with Cosign
+      uses: sigstore/cosign-installer@v3
+      with:
+        cosign-release: 'v2.2.0'
+      env:
+        COSIGN_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+    - run: |
+        cosign sign --key env://COSIGN_KEY ${{ steps.metadata.outputs.tags }}
+
+    - name: Critical CVE scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ steps.metadata.outputs.tags }}
+        format: 'sarif'
+        output: trivy-results.sarif
+        severity: 'CRITICAL'
+        ignore-unfixed: true
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: build-sign-scan
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        cloud: [aws, gcp]   # Multi-cloud deployment
+    steps:
+    - name: Configure AWS Creds
+      if: matrix.cloud == 'aws'
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_IAM_ROLE }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Configure GCP Creds
+      if: matrix.cloud == 'gcp'
+      uses: google-github-actions/auth@v1
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Deploy to Kubernetes (Helm)
+      uses: bitovi/github-actions-deploy-helm-chart@v1
+      with:
+        cluster-name: ${{ env.EKS_CLUSTER }}
+        namespace: ${{ env.K8S_NAMESPACE }}
+        name: samsara-ai
+        chart: ${{ env.HELM_CHART }}
+        version: ${{ github.ref_name }}
+        values: |
+          image:
+            repository: ${{ needs.build-sign-scan.outputs.signed-image }}
+            pullPolicy: Always
+          autoscaling:
+            enabled: true
+            minReplicas: 3
+
+    - name: Post-deployment smoke test
+      run: |
+        ./scripts/smoke-test.sh --endpoint https://api.${{ matrix.cloud }}.samsara.ai/health
+
+    - name: Rollback on failure
+      if: ${{ failure() }}
+      uses: rollback/action@v2
+      with:
+        helm-release: samsara-ai
+        namespace: ${{ env.K8S_NAMESPACE }}
+
+  post-release:
+    name: Post-Release Tasks
+    needs: deploy-prod
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update JIRA release tracker
+      uses: atlassian/gajira-update-issue@v3
+      with:
+        issue: SAMSA-${{ github.run_number }}
+        status: Done
+        comment: |
+          Production release ${{ github.ref_name }} deployed successfully
+      env:
+        JIRA_API_TOKEN: ${{ secrets.JIRA_TOKEN }}
+
+    - name: Notify Slack Channel
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'prod-releases'
+        slack-message: |
+          :rocket: *Samsara AI ${{ github.ref_name }} Released* 
+          - Image: `${{ needs.build-sign-scan.outputs.signed-image }}`
+          - Deployment Status: SUCCESS
+          - Run Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      env:
+        SLACK_TOKEN: ${{ secrets.SLACK_RELEASE_TOKEN }}
