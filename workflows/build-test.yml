@@ -1,0 +1,120 @@
+name: Samsara AI Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  build-test-scan:
+    name: Build -> Test -> Security Scan
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: samsara_test
+        ports: ["5432:5432"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+        cache-dependency-path: '**/requirements.txt'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio pytest-cov bandit
+
+    - name: Run unit tests
+      run: |
+        pytest tests/unit/ \
+          --cov=src \
+          --cov-report=xml:coverage.xml \
+          --cov-report=html:htmlcov
+
+    - name: Run integration tests
+      env:
+        TEST_DB_URI: postgresql://testuser:testpass@postgres:5432/samsara_test
+        TEST_REDIS_URI: redis://redis:6379/0
+      run: |
+        pytest tests/integration/ \
+          -v \
+          --log-level=DEBUG
+
+    - name: Security scan (Bandit)
+      run: |
+        bandit -r src/ -f json -o bandit-results.json
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-reports
+        path: |
+          coverage.xml
+          htmlcov/
+          bandit-results.json
+
+    - name: Code Quality (SonarCloud)
+      if: github.ref == 'refs/heads/main'
+      uses: sonarsource/sonarcloud-github-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: >
+          -Dsonar.projectKey=Samsara_AI
+          -Dsonar.organization=your-org
+          -Dsonar.python.coverage.reportPaths=coverage.xml
+          -Dsonar.security.reportsPaths=bandit-results.json
+
+    - name: Build multi-arch Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        file: ./infrastructure/docker/agent.Dockerfile
+        platforms: linux/amd64,linux/arm64
+        tags: |
+          ${{ env.DOCKERHUB_USERNAME }}/samsara-ai:pr-${{ github.event.number }}
+          ${{ env.DOCKERHUB_USERNAME }}/samsara-ai:sha-${{ github.sha }}
+        push: ${{ github.event_name == 'push' }}
+
+    - name: Vulnerability scan (Trivy)
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.DOCKERHUB_USERNAME }}/samsara-ai:pr-${{ github.event.number }}
+        format: 'table'
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os,library'
+        severity: 'CRITICAL,HIGH'
+
+    - name: Notify Slack
+      if: ${{ always() }}
+      uses: slackapi/slack-github-action@v1.23.0
+      with:
+        channel-id: 'ci-notifications'
+        slack-message: |
+          Build ${{ job.status }} for PR #${{ github.event.number }}
+          Workflow: ${{ github.workflow }} 
+          Details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      env:
+        SLACK_TOKEN: ${{ secrets.SLACK_CI_TOKEN }}
