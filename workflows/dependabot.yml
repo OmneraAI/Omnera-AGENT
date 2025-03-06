@@ -1,0 +1,102 @@
+# .github/dependabot.yml
+
+version: 2
+updates:
+  # Core AI/ML Dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "09:00"
+      timezone: "UTC"
+    reviewers:
+      - "samsara-ai/core"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    ignore:
+      - dependency-name: "numpy"
+        versions: ["2.x"]  # Block major version until TF supports it
+      - dependency-name: "pytest*"
+        update-types: ["version-update:semver-minor"]
+
+  # Infrastructure-as-Code
+  - package-ecosystem: "docker"
+    directory: "/infrastructure/docker"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    labels:
+      - "infra"
+      - "security"
+    allow:
+      - dependency-type: "direct"  # Only explicit FROM images
+
+  # Frontend/UI (if applicable)
+  - package-ecosystem: "npm"
+    directory: "/web/client"
+    schedule:
+      interval: "weekly"
+      time: "10:00"
+    registries:
+      - "npm-registry"
+    versioning-strategy: "increase-if-necessary"
+    rebase-strategy: "auto"
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # CI/CD Tooling
+  - package-ecosystem: "github-actions"
+    directory: "/.github/workflows"
+    schedule:
+      interval: "daily"
+      time: "08:00"
+    reviewers:
+      - "samsara-ai/devops"
+    insecure-external-code-execution: "allow"  # Required for composite actions
+    labels:
+      - "ci"
+      - "automation"
+
+  # Cloud Provisioning
+  - package-ecosystem: "terraform"
+    directory: "/infrastructure/terraform"
+    schedule:
+      interval: "monthly"
+    target-branch: "staging"
+    versioning-strategy: "lockfile-only"
+    labels:
+      - "terraform"
+      - "cloud"
+
+  # Kubernetes Ecosystem
+  - package-ecosystem: "helm"
+    directory: "/infrastructure/helm"
+    schedule:
+      interval: "weekly"
+    registries:
+      - "artifact-registry"
+    version-constraint-update: "auto"
+    labels:
+      - "kubernetes"
+      - "helm"
+
+# Security Automation Overrides
+security-updates:
+  enabled: true
+  assignees:
+    - "samsara-security-team"
+  labels:
+    - "security"
+    - "urgent"
+  versioning-strategy: "auto"
+  pull-request-branch-name:
+    separator: "-"
+  auto-merge:
+    enable-for-security: true
+    allowed-update-types: ["semver-patch"]
+    require-approval-from: ["samsara-security-team"]
