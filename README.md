@@ -10,6 +10,13 @@
 - **Autonomous Collaboration** (DAG-based workflows with self-healing capabilities)
 - **Regulatory Compliance** (GDPR/HIPAA/PCI-DSS built-in controls)
 
+## Connect with us
+[![Twitter](https://img.shields.io/badge/Twitter-%231DA1F2.svg?&style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/OmneraAGENT)
+[![Twitter](https://img.shields.io/badge/Twitter-%231DA1F2.svg?&style=for-the-badge&logo=twitter&logoColor=white)](https://twitter.com/HMichaeldouglas)
+[![Website](https://img.shields.io/badge/Website-%23000000.svg?&style=for-the-badge&logo=google-chrome&logoColor=white)](https://omneraai.com/)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?&style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/iammichaeldouglas)
+
+
 ## Key Enterprise Features
 | Feature | Technology Stack | Compliance |
 |---------|------------------|------------|
@@ -19,26 +26,6 @@
 | **Post-Quantum Security** | Kyber-1024, Dilithium ML-DSA | FIPS 203 (Draft) |
 | **Cost Governance** | ML-driven Resource Optimizer, FinOps API | AWS CCM |
 
-## Architecture Overview
-```text
-┌──────────────────────────────┐
-│   Samsara Control Plane       │
-│  ┌─────────────┐ ┌─────────┐ │
-│  │ API Gateway │ │ Policy  │ │      Edge
-│  │ (FastAPI)   │ │ Engine  │◄├──┐  Deployment
-│  └──────┬──────┘ └────┬────┘ │  │  (IoT/5G)
-│         ▼              ▼      │  └─────────┐
-│  ┌─────────────┐ ┌─────────┐ │             ▼
-│  │ Agent       │ │ Key     │ │  ┌─────────────────────┐
-│  │ Lifecycle   │ │ Mgmt    │ │  │ Samsara Agent Swarm │
-│  │ Manager     │ │ (Vault) │ │  │ ┌───┐ ┌───┐ ┌───┐   │
-│  └──────┬──────┘ └────┬────┘ │  │ │Agt│ │Agt│ │Agt│   │
-│         ▼              ▼      │  │ └─┬─┘ └─┬─┘ └─┬─┘   │
-│  ┌──────────────────────────┐│  │   ▼     ▼     ▼      │
-│  │ Distributed Workflow Engine │  │  Auto-Scaling Group  │
-│  │ (Apache Airflow + Dask)   ││  └─────────────────────┘
-└──────────────────────────────┘
-```
 
 ## Core Architecture
 ```mermaid
@@ -60,31 +47,6 @@ flowchart TD
     APIGateway -->|OAuth2| Observability[[Prometheus, Loki]]
 ```
 
-## Multi-Agent Collaboration   
-```mermaid
-%%{init: {'theme': 'dark'}}%%
-sequenceDiagram
-    participant User as Client
-    participant API as API Gateway
-    participant Orchestrator
-    participant Agent1 as Data Agent
-    participant Agent2 as Model Agent
-    participant Agent3 as Auditor Agent
-
-    User->>API: POST /task {"type": "risk-analysis"}
-    API->>Orchestrator: AuthZ Check
-    Orchestrator->>Agent1: Spawn (Bloomberg API)
-    Orchestrator->>Agent2: Spawn (PyTorch Model)
-    Orchestrator->>Agent3: Spawn (Compliance Auditor)
-    
-    Agent1->>SharedDB: Write Encrypted Data
-    Agent2->>SharedDB: Read Data → Run Simulation
-    Agent3->>Agent2: Validate Outputs
-    Agent2->>Aggregator: Submit Results (+ DP Noise)
-    Aggregator->>API: Final Report
-    API->>User: 201 Created + Report URL
-
-```
 
 ## Zero-Trust Security
 ```mermaid
@@ -121,21 +83,21 @@ flowchart LR
 ### Installation
 ```
 # Clone with submodules
-git clone --recurse-submodules https://github.com/samsara-ai/core.git
+git clone --recurse-submodules https://github.com/Omnera-ai/core.git
 
 # Initialize infrastructure
 terraform -chdir=infrastructure/aws-eks init
 terraform apply -var="cluster_name=samsara-prod"
 
-# Deploy Samsara AI
-helm install samsara ./charts/samsara \
-  --set global.encryptionKey="$(vault read -field=key samsara/encryption)" \
+# Deploy Omnera AI
+helm install Omnera ./charts/Omnera \
+  --set global.encryptionKey="$(vault read -field=key Omnera/encryption)" \
   --set prometheus.retention=1y
 ```
 
 ### Usage Example: Financial Risk Analysis
 ```
-from samsara import agents, workflows
+from Omnera import agents, workflows
 
 # Create agent swarm
 risk_agents = agents.Swarm(
