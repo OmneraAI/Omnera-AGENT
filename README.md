@@ -1,11 +1,11 @@
-# Samsara AI - Enterprise Multi-Agent Framework
+# Omnera AGENT - Enterprise Multi-Agent Framework
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-0078D4)](LICENSE)
 [![SLSA Level 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/samsara-ai/core/badge)](https://securityscorecards.dev)
 
 ## Project Vision
-**Samsara AI** redefines enterprise automation through a quantum-ready, zero-trust multi-agent framework that combines:
+**Omnera AGENT** redefines enterprise automation through a quantum-ready, zero-trust multi-agent framework that combines:
 - **Military-Grade Security** (FIPS 140-3 validated crypto, Zero Trust Architecture)
 - **Autonomous Collaboration** (DAG-based workflows with self-healing capabilities)
 - **Regulatory Compliance** (GDPR/HIPAA/PCI-DSS built-in controls)
